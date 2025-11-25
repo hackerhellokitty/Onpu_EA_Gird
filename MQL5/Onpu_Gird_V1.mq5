@@ -4,7 +4,7 @@
 //|                                        Converted to MQL5 Native   |
 //+------------------------------------------------------------------+
 #property copyright "Onpu Grid V1.1 (MT5 Stable)"
-#property version   "1.1"
+#property version   "1.1.1"
 #property strict
 
 // เรียกใช้ Library มาตรฐานของ MT5
@@ -39,7 +39,7 @@ input int    Safety_TP           = 2000;       // Safety TP (Points)
 input double Stop_Loss           = 0;          // Stop Loss (0 = Off)
 
 input group  "=== Dashboard ==="
-input int    Dashboard_X         = 150;        // X Offset
+input int    Dashboard_X         = 170;        // X Offset
 input int    Dashboard_Y         = 20;         // Y Offset
 input color  Color_Text          = clrGold;    // Text Color
 input bool   Auto_Color          = true;       // Auto Dark Mode
@@ -308,7 +308,7 @@ void SetupChart() {
 }
 
 void CreateGUI() {
-   ObjectCreate(0, "Onpu_BG", OBJ_RECTANGLE_LABEL, 0, 0, 0);
+   
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_CORNER, CORNER_RIGHT_UPPER);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XDISTANCE, Dashboard_X);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_YDISTANCE, Dashboard_Y);
@@ -327,8 +327,8 @@ void CreateGUI() {
    CreateLabel("Onpu_Lbl_Orders", "B: 0 | S: 0", 20, 160, clrWhite, 9);
    CreateLabel("Onpu_Lbl_Goal", "GOAL: " + DoubleToString(Grand_Target_Equity, 2), 20, 180, clrAqua, 9);
 
-   CreateButton("Onpu_Btn_Switch", "STOP EA", 20, 205, 80, 30, clrRed);
-   CreateButton("Onpu_Btn_CloseAll", "CLOSE ALL", 110, 205, 90, 30, clrOrangeRed);
+   CreateButton("Onpu_Btn_Switch", "STOP EA", 20, 205, 190, 30, clrRed);
+   CreateButton("Onpu_Btn_CloseAll", "CLOSE ALL", 20, 240, 190, 30, clrOrangeRed);
    
    ChartRedraw();
 }
