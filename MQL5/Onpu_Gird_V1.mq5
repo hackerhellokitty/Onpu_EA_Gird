@@ -3,8 +3,8 @@
 //|                                     Copyright 2025, Onpu Dev Team |
 //|                                        Converted to MQL5 Native   |
 //+------------------------------------------------------------------+
-#property copyright "Onpu Grid V2.3 (MT5 Stable)"
-#property version   "2.30"
+#property copyright "Onpu Grid V1.1 (MT5 Stable)"
+#property version   "1.1"
 #property strict
 
 // เรียกใช้ Library มาตรฐานของ MT5
