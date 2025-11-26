@@ -57,7 +57,7 @@ void UpdateDashboard();
 void UpdateButtonState();
 void CreateLabel(string name, string text, int x, int y, color c, int size);
 void CreateButton(string name, string text, int x, int y, int w, int h, color bg);
-void PrintDailyNews();
+void PrintDailyNews(); // <--- เพิ่มตรงนี้แล้ว
 void CheckProfitAndTargets();
 void CloseAllTrades();
 void CloseSpecificSide(ENUM_POSITION_TYPE type);
@@ -70,7 +70,7 @@ bool CheckMoney(double lot, ENUM_ORDER_TYPE type);
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   Print("Onpu V2.3 (MT5 Converted) Loaded.");
+   Print("Onpu V1.2 (MT5 Converted) Loaded.");
    
    // ตั้งค่า CTrade
    m_trade.SetExpertMagicNumber(Magic_Number);
@@ -242,7 +242,7 @@ int CountPositions(ENUM_POSITION_TYPE type) {
 
 double FindLastOpenPrice(ENUM_POSITION_TYPE type) {
    double last_price = 0;
-   ulong last_ticket = 0; // แก้เป็น ulong เพื่อแก้ warning loss of data
+   ulong last_ticket = 0; // ulong เพื่อแก้ warning loss of data
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       if(m_position.SelectByIndex(i)) {
          if(m_position.Symbol() == Symbol() && m_position.Magic() == Magic_Number && m_position.PositionType() == type) {
@@ -330,7 +330,7 @@ void CreateGUI() {
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BGCOLOR, clrDarkSlateGray);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BORDER_TYPE, BORDER_FLAT);
    
-   CreateLabel("Onpu_Lbl_Title", ":: ONPU V2.3 (MT5) ::", 20, 15, clrGold, 12);
+   CreateLabel("Onpu_Lbl_Title", ":: ONPU V1.2 (MT5) ::", 20, 15, clrGold, 12);
    CreateLabel("Onpu_Lbl_Magic", "Magic No : " + IntegerToString(Magic_Number), 20, 40, clrWhite, 9);
    CreateLabel("Onpu_Lbl_Status", "Status: RUNNING", 20, 60, clrLime, 10);
    CreateLabel("Onpu_Lbl_Bal", "Balance: 0.00", 20, 80, clrWhite, 9);
@@ -417,6 +417,7 @@ void CreateButton(string name, string text, int x, int y, int w, int h, color bg
    ObjectSetString(0, name, OBJPROP_TEXT, text);
    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
 }
+
 // ==========================================================================
 // [ส่วนที่ 5] : NEWS SCANNER FUNCTION (RED ONLY & SORTED)
 // ==========================================================================
@@ -462,7 +463,7 @@ void PrintDailyNews()
      }
    else
      {
-      Print("Error accessing Calendar data!");
+      Print("Error accessing Calendar data! (Check Options > Allowed WebRequest)");
      }
    Print("============================================================");
 }
