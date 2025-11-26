@@ -3,8 +3,8 @@
 //|                                     Copyright 2025, Onpu Dev Team |
 //|                                        Converted to MQL5 Native   |
 //+------------------------------------------------------------------+
-#property copyright "Onpu Grid V1.1 (MT5 Stable)"
-#property version   "1.1.1"
+#property copyright "Onpu Grid V1.2 News Scan"
+#property version   "1.2"
 #property strict
 
 // เรียกใช้ Library มาตรฐานของ MT5
@@ -45,10 +45,25 @@ input color  Color_Text          = clrGold;    // Text Color
 input bool   Auto_Color          = true;       // Auto Dark Mode
 
 // ==========================================================================
-// [ส่วนที่ 2] : ตัวแปรระบบ
+// [ส่วนที่ 2] : ตัวแปรระบบ และ Forward Declarations (สารบัญฟังก์ชัน)
 // ==========================================================================
 double max_balance;
 bool   System_Enabled = true;
+
+// *** ประกาศชื่อฟังก์ชันไว้ก่อน (Forward Declaration) เพื่อแก้ Error undeclared identifier ***
+void SetupChart();
+void CreateGUI();
+void UpdateDashboard();
+void UpdateButtonState();
+void CreateLabel(string name, string text, int x, int y, color c, int size);
+void CreateButton(string name, string text, int x, int y, int w, int h, color bg);
+void PrintDailyNews();
+void CheckProfitAndTargets();
+void CloseAllTrades();
+void CloseSpecificSide(ENUM_POSITION_TYPE type);
+double FindLastOpenPrice(ENUM_POSITION_TYPE type);
+int CountPositions(ENUM_POSITION_TYPE type);
+bool CheckMoney(double lot, ENUM_ORDER_TYPE type);
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -60,13 +75,16 @@ int OnInit()
    // ตั้งค่า CTrade
    m_trade.SetExpertMagicNumber(Magic_Number);
    m_trade.SetDeviationInPoints(Slippage);
-   m_trade.SetTypeFilling(ORDER_FILLING_IOC); // ตั้งค่าการส่งคำสั่ง (IOC รองรับเกือบทุกโบรค)
+   m_trade.SetTypeFilling(ORDER_FILLING_IOC); 
    
    // ดึงข้อมูลบัญชีเริ่มต้น
    max_balance = AccountInfoDouble(ACCOUNT_BALANCE);
    
    if(Auto_Color) SetupChart();
    CreateGUI();
+   
+   // สั่งให้ Print ข่าว USD ของวันนี้ทันทีเมื่อเริ่มทำงาน
+   PrintDailyNews();
    
    return(INIT_SUCCEEDED);
   }
@@ -198,16 +216,13 @@ void OnTick()
 // [ส่วนที่ 3] : HELPER FUNCTIONS (MT5 Specific)
 // ==========================================================================
 
-// เช็คเงินประกัน (MT5 Style)
 bool CheckMoney(double lot, ENUM_ORDER_TYPE type) {
    double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    double req_margin = 0;
-   // คำนวณ Margin ที่ต้องใช้จริง
    if(!OrderCalcMargin(type, Symbol(), lot, m_symbol.Ask(), req_margin)) {
       Print("Error Calculating Margin");
       return false;
    }
-   
    if(free_margin < req_margin) {
       Print("Not enough money for Lot ", lot);
       return false;
@@ -227,12 +242,10 @@ int CountPositions(ENUM_POSITION_TYPE type) {
 
 double FindLastOpenPrice(ENUM_POSITION_TYPE type) {
    double last_price = 0;
-   long last_ticket = 0; // MT5 Ticket เป็น long
-   
+   ulong last_ticket = 0; // แก้เป็น ulong เพื่อแก้ warning loss of data
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       if(m_position.SelectByIndex(i)) {
          if(m_position.Symbol() == Symbol() && m_position.Magic() == Magic_Number && m_position.PositionType() == type) {
-            // หา Ticket ล่าสุด (เลขมากสุด = เปิดล่าสุด)
             if(m_position.Ticket() > last_ticket) {
                last_ticket = m_position.Ticket();
                last_price = m_position.PriceOpen();
@@ -296,7 +309,7 @@ void CheckProfitAndTargets() {
 }
 
 // ==========================================================================
-// [ส่วนที่ 4] : หน้าจอแสดงผล (GUI) - (Logic เดิม ใช้งานได้ใน MT5)
+// [ส่วนที่ 4] : หน้าจอแสดงผล (GUI) - Vertical Layout Fixed
 // ==========================================================================
 
 void SetupChart() {
@@ -313,7 +326,7 @@ void CreateGUI() {
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XDISTANCE, Dashboard_X);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_YDISTANCE, Dashboard_Y);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XSIZE, 230);
-   ObjectSetInteger(0, "Onpu_BG", OBJPROP_YSIZE, 250);
+   ObjectSetInteger(0, "Onpu_BG", OBJPROP_YSIZE, 280); 
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BGCOLOR, clrDarkSlateGray);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BORDER_TYPE, BORDER_FLAT);
    
@@ -393,12 +406,63 @@ void CreateButton(string name, string text, int x, int y, int w, int h, color bg
    if(ObjectFind(0, name) < 0) {
       ObjectCreate(0, name, OBJ_BUTTON, 0, 0, 0);
       ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, Dashboard_X + x);
-      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, Dashboard_Y + y);
-      ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-      ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
       ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 9);
    }
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, Dashboard_X + x);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, Dashboard_Y + y);
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+   
    ObjectSetString(0, name, OBJPROP_TEXT, text);
    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
+}
+// ==========================================================================
+// [ส่วนที่ 5] : NEWS SCANNER FUNCTION (RED ONLY & SORTED)
+// ==========================================================================
+void PrintDailyNews()
+{
+   MqlCalendarValue values[];
+   MqlCalendarEvent event;
+   MqlCalendarCountry country;
+   
+   // กำหนดช่วงเวลา "ทั้งวันของวันนี้" (00:00 - 23:59)
+   datetime time_start = iTime(Symbol(), PERIOD_D1, 0); 
+   datetime time_end   = time_start + 86400; 
+   
+   Print("======= 🔴 TODAY'S HIGH IMPACT USD NEWS (" + TimeToString(time_start, TIME_DATE) + ") =======");
+   
+   // ดึงค่าข่าว (ฟังก์ชันนี้คืนค่าเรียงตามเวลามาให้อยู่แล้วครับ)
+   if(CalendarValueHistory(values, time_start, time_end))
+     {
+      int count = 0;
+      for(int i=0; i<ArraySize(values); i++)
+        {
+         if(CalendarEventById(values[i].event_id, event))
+           {
+            // 1. เช็คสกุลเงิน USD
+            if(CalendarCountryById(event.country_id, country))
+              {
+               if(country.currency != "USD") continue;
+              }
+            else continue;
+            
+            // 2. *** กรองเฉพาะข่าวแดง (High Impact Only) ***
+            if(event.importance != CALENDAR_IMPORTANCE_HIGH) continue; 
+            
+            // 3. แสดงผล: เวลาข่าว : ชื่อข่าว
+            string news_time = TimeToString(values[i].time, TIME_MINUTES); // ดึงเวลาจาก values[i] จะตรงกับเวลาข่าวจริง
+            
+            Print("⏰ " + news_time + "  |  🔴 " + event.event_code);
+            count++;
+           }
+        }
+        
+        if(count == 0) Print("✅ No Red News Today. (Safe to Trade)");
+     }
+   else
+     {
+      Print("Error accessing Calendar data!");
+     }
+   Print("============================================================");
 }
