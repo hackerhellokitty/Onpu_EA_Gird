@@ -3,8 +3,8 @@
 //|                                     Copyright 2025, Onpu Dev Team |
 //|                                        Converted to MQL5 Native   |
 //+------------------------------------------------------------------+
-#property copyright "Onpu Grid V1.2 News Scan"
-#property version   "1.2"
+#property copyright "Onpu Grid V1.2 (News Monitor)"
+#property version   "1.21"
 #property strict
 
 // เรียกใช้ Library มาตรฐานของ MT5
@@ -45,19 +45,19 @@ input color  Color_Text          = clrGold;    // Text Color
 input bool   Auto_Color          = true;       // Auto Dark Mode
 
 // ==========================================================================
-// [ส่วนที่ 2] : ตัวแปรระบบ และ Forward Declarations (สารบัญฟังก์ชัน)
+// [ส่วนที่ 2] : ตัวแปรระบบ และ Forward Declarations
 // ==========================================================================
 double max_balance;
 bool   System_Enabled = true;
 
-// *** ประกาศชื่อฟังก์ชันไว้ก่อน (Forward Declaration) เพื่อแก้ Error undeclared identifier ***
+// ประกาศชื่อฟังก์ชันล่วงหน้า
 void SetupChart();
 void CreateGUI();
 void UpdateDashboard();
 void UpdateButtonState();
 void CreateLabel(string name, string text, int x, int y, color c, int size);
 void CreateButton(string name, string text, int x, int y, int w, int h, color bg);
-void PrintDailyNews(); // <--- เพิ่มตรงนี้แล้ว
+void PrintDailyNews(); // <--- พระเอกของเรา (โชว์อย่างเดียว)
 void CheckProfitAndTargets();
 void CloseAllTrades();
 void CloseSpecificSide(ENUM_POSITION_TYPE type);
@@ -70,20 +70,18 @@ bool CheckMoney(double lot, ENUM_ORDER_TYPE type);
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   Print("Onpu V1.2 (MT5 Converted) Loaded.");
+   Print("Onpu V1.2 (News Monitor Only) Loaded.");
    
-   // ตั้งค่า CTrade
    m_trade.SetExpertMagicNumber(Magic_Number);
    m_trade.SetDeviationInPoints(Slippage);
    m_trade.SetTypeFilling(ORDER_FILLING_IOC); 
    
-   // ดึงข้อมูลบัญชีเริ่มต้น
    max_balance = AccountInfoDouble(ACCOUNT_BALANCE);
    
    if(Auto_Color) SetupChart();
    CreateGUI();
    
-   // สั่งให้ Print ข่าว USD ของวันนี้ทันทีเมื่อเริ่มทำงาน
+   // [SHOW ONLY] สั่ง Print ข่าวตอนเริ่ม แต่ไม่ส่งผลกับ Logic เทรด
    PrintDailyNews();
    
    return(INIT_SUCCEEDED);
@@ -105,7 +103,6 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
   {
    if(id == CHARTEVENT_OBJECT_CLICK)
      {
-      // ปุ่ม Start/Stop
       if(sparam == "Onpu_Btn_Switch")
         {
          System_Enabled = !System_Enabled;
@@ -113,7 +110,6 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
          PlaySound("tick.wav");
          ChartRedraw();
         }
-      // ปุ่ม Close All
       if(sparam == "Onpu_Btn_CloseAll")
         {
          if(MessageBox("CONFIRM CLOSE ALL TRADES?", "Emergency", MB_YESNO|MB_ICONWARNING) == IDYES)
@@ -131,7 +127,6 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   // อัปเดตราคาล่าสุดเสมอใน MT5
    if(!m_symbol.Name(Symbol())) return;
    m_symbol.RefreshRates();
 
@@ -139,10 +134,10 @@ void OnTick()
 
    if(!System_Enabled) return;
 
-   // 1. เช็คเป้าหมายกำไร
+   // --- TRADING LOGIC START (ไม่มีการเช็คข่าวในนี้) ---
+
    CheckProfitAndTargets();
 
-   // 2. คำนวณ Drawdown
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
    if(equity > max_balance) max_balance = equity;
@@ -150,70 +145,60 @@ void OnTick()
    double drawdown_percent = 0;
    if(balance > 0) drawdown_percent = ((balance - equity) / balance) * 100.0;
 
-   // 3. SAFETY CUT
    if(drawdown_percent >= DD_Percentage_Cut)
      {
       string msg = "⚠️ DANGER: Drawdown " + DoubleToString(drawdown_percent,2) + "% Limit Reached! Closing ALL.";
       Print(msg);
       Alert(msg);
-      
       CloseAllTrades();
       System_Enabled = false; 
       UpdateButtonState();
       return;
      }
 
-   // 4. ระบบเทรด BUY
+   // 4. BUY Logic
    if(Trade_Buy)
      {
       int buy_count = CountPositions(POSITION_TYPE_BUY);
       double last_buy_price = FindLastOpenPrice(POSITION_TYPE_BUY);
       double next_buy_lot = Start_Lot_Size + (buy_count * Lot_Add); 
-      
       double price_tp = m_symbol.Ask() + Safety_TP * Point();
       double price_sl = (Stop_Loss == 0) ? 0 : m_symbol.Ask() - Stop_Loss * Point();
-      
       string comment = "Onpu_" + IntegerToString(Magic_Number) + "_B" + IntegerToString(buy_count+1);
 
-      if(buy_count == 0)
-        {
+      if(buy_count == 0) {
          if(CheckMoney(next_buy_lot, ORDER_TYPE_BUY)) 
             m_trade.Buy(next_buy_lot, Symbol(), m_symbol.Ask(), price_sl, price_tp, comment);
-        }
-      else if(buy_count < Maximum_Grid && m_symbol.Ask() <= (last_buy_price - (Grid_Distance * Point())))
-        {
+      }
+      else if(buy_count < Maximum_Grid && m_symbol.Ask() <= (last_buy_price - (Grid_Distance * Point()))) {
          if(CheckMoney(next_buy_lot, ORDER_TYPE_BUY))
             m_trade.Buy(next_buy_lot, Symbol(), m_symbol.Ask(), price_sl, price_tp, comment);
-        }
+      }
      }
 
-   // 5. ระบบเทรด SELL
+   // 5. SELL Logic
    if(Trade_Sell)
      {
       int sell_count = CountPositions(POSITION_TYPE_SELL);
       double last_sell_price = FindLastOpenPrice(POSITION_TYPE_SELL);
       double next_sell_lot = Start_Lot_Size + (sell_count * Lot_Add);
-
       double price_tp = m_symbol.Bid() - Safety_TP * Point();
       double price_sl = (Stop_Loss == 0) ? 0 : m_symbol.Bid() + Stop_Loss * Point();
-
       string comment = "Onpu_" + IntegerToString(Magic_Number) + "_S" + IntegerToString(sell_count+1);
 
-      if(sell_count == 0)
-        {
+      if(sell_count == 0) {
          if(CheckMoney(next_sell_lot, ORDER_TYPE_SELL)) 
             m_trade.Sell(next_sell_lot, Symbol(), m_symbol.Bid(), price_sl, price_tp, comment);
-        }
-      else if(sell_count < Maximum_Grid && m_symbol.Bid() >= (last_sell_price + (Grid_Distance * Point())))
-        {
+      }
+      else if(sell_count < Maximum_Grid && m_symbol.Bid() >= (last_sell_price + (Grid_Distance * Point()))) {
          if(CheckMoney(next_sell_lot, ORDER_TYPE_SELL))
             m_trade.Sell(next_sell_lot, Symbol(), m_symbol.Bid(), price_sl, price_tp, comment);
-        }
+      }
      }
   }
 
 // ==========================================================================
-// [ส่วนที่ 3] : HELPER FUNCTIONS (MT5 Specific)
+// [ส่วนที่ 3] : HELPER FUNCTIONS
 // ==========================================================================
 
 bool CheckMoney(double lot, ENUM_ORDER_TYPE type) {
@@ -242,7 +227,7 @@ int CountPositions(ENUM_POSITION_TYPE type) {
 
 double FindLastOpenPrice(ENUM_POSITION_TYPE type) {
    double last_price = 0;
-   ulong last_ticket = 0; // ulong เพื่อแก้ warning loss of data
+   ulong last_ticket = 0; 
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       if(m_position.SelectByIndex(i)) {
          if(m_position.Symbol() == Symbol() && m_position.Magic() == Magic_Number && m_position.PositionType() == type) {
@@ -280,7 +265,6 @@ void CloseAllTrades() {
 void CheckProfitAndTargets() {
    double sum_buy_profit = 0;
    double sum_sell_profit = 0;
-   
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       if(m_position.SelectByIndex(i)) {
          if(m_position.Symbol() == Symbol() && m_position.Magic() == Magic_Number) {
@@ -290,7 +274,6 @@ void CheckProfitAndTargets() {
          }
       }
    }
-   
    if(sum_buy_profit >= Target_Money) {
       CloseSpecificSide(POSITION_TYPE_BUY);
       Print("Closed Buy Side. Profit: ", sum_buy_profit);
@@ -299,7 +282,6 @@ void CheckProfitAndTargets() {
       CloseSpecificSide(POSITION_TYPE_SELL);
       Print("Closed Sell Side. Profit: ", sum_sell_profit);
    }
-   
    if(AccountInfoDouble(ACCOUNT_EQUITY) >= Grand_Target_Equity) {
       CloseAllTrades();
       System_Enabled = false;
@@ -309,7 +291,7 @@ void CheckProfitAndTargets() {
 }
 
 // ==========================================================================
-// [ส่วนที่ 4] : หน้าจอแสดงผล (GUI) - Vertical Layout Fixed
+// [ส่วนที่ 4] : GUI (Vertical Layout)
 // ==========================================================================
 
 void SetupChart() {
@@ -321,7 +303,7 @@ void SetupChart() {
 }
 
 void CreateGUI() {
-   
+   ObjectCreate(0, "Onpu_BG", OBJ_RECTANGLE_LABEL, 0, 0, 0);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_CORNER, CORNER_RIGHT_UPPER);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XDISTANCE, Dashboard_X);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_YDISTANCE, Dashboard_Y);
@@ -349,8 +331,7 @@ void CreateGUI() {
 void UpdateDashboard() {
    double bal = AccountInfoDouble(ACCOUNT_BALANCE);
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
-   double dd = 0;
-   if(bal > 0) dd = ((bal - eq) / bal) * 100.0;
+   double dd = (bal > 0) ? ((bal - eq) / bal) * 100.0 : 0;
 
    ObjectSetString(0, "Onpu_Lbl_Bal", OBJPROP_TEXT, "Balance: " + DoubleToString(bal, 2));
    ObjectSetString(0, "Onpu_Lbl_Eq", OBJPROP_TEXT, "Equity: " + DoubleToString(eq, 2));
@@ -419,7 +400,7 @@ void CreateButton(string name, string text, int x, int y, int w, int h, color bg
 }
 
 // ==========================================================================
-// [ส่วนที่ 5] : NEWS SCANNER FUNCTION (RED ONLY & SORTED)
+// [ส่วนที่ 5] : NEWS SCANNER FUNCTION (DISPLAY ONLY)
 // ==========================================================================
 void PrintDailyNews()
 {
@@ -427,13 +408,11 @@ void PrintDailyNews()
    MqlCalendarEvent event;
    MqlCalendarCountry country;
    
-   // กำหนดช่วงเวลา "ทั้งวันของวันนี้" (00:00 - 23:59)
    datetime time_start = iTime(Symbol(), PERIOD_D1, 0); 
    datetime time_end   = time_start + 86400; 
    
    Print("======= 🔴 TODAY'S HIGH IMPACT USD NEWS (" + TimeToString(time_start, TIME_DATE) + ") =======");
    
-   // ดึงค่าข่าว (ฟังก์ชันนี้คืนค่าเรียงตามเวลามาให้อยู่แล้วครับ)
    if(CalendarValueHistory(values, time_start, time_end))
      {
       int count = 0;
@@ -441,18 +420,15 @@ void PrintDailyNews()
         {
          if(CalendarEventById(values[i].event_id, event))
            {
-            // 1. เช็คสกุลเงิน USD
             if(CalendarCountryById(event.country_id, country))
               {
                if(country.currency != "USD") continue;
               }
             else continue;
             
-            // 2. *** กรองเฉพาะข่าวแดง (High Impact Only) ***
             if(event.importance != CALENDAR_IMPORTANCE_HIGH) continue; 
             
-            // 3. แสดงผล: เวลาข่าว : ชื่อข่าว
-            string news_time = TimeToString(values[i].time, TIME_MINUTES); // ดึงเวลาจาก values[i] จะตรงกับเวลาข่าวจริง
+            string news_time = TimeToString(values[i].time, TIME_MINUTES); 
             
             Print("⏰ " + news_time + "  |  🔴 " + event.event_code);
             count++;
