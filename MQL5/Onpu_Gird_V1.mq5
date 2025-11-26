@@ -3,8 +3,8 @@
 //|                                     Copyright 2025, Onpu Dev Team |
 //|                                        Converted to MQL5 Native   |
 //+------------------------------------------------------------------+
-#property copyright "Onpu Grid V1.2 (News Monitor)"
-#property version   "1.21"
+#property copyright "Onpu Grid V1.2 (News Monitor - Auto Refresh)"
+#property version   "1.22"
 #property strict
 
 // เรียกใช้ Library มาตรฐานของ MT5
@@ -12,52 +12,53 @@
 #include <Trade\PositionInfo.mqh>
 #include <Trade\SymbolInfo.mqh>
 
-CTrade         m_trade;       // ตัวจัดการออเดอร์
-CPositionInfo  m_position;    // ตัวจัดการ Position
-CSymbolInfo    m_symbol;      // ตัวจัดการคู่เงิน
+CTrade         m_trade;       
+CPositionInfo  m_position;    
+CSymbolInfo    m_symbol;      
 
 // ==========================================================================
 // [ส่วนที่ 1] : การตั้งค่า (USER INPUTS)
 // ==========================================================================
 input group  "=== Trading Modes ==="
-input bool   Trade_Buy           = true;       // Enable Buy Trades
-input bool   Trade_Sell          = true;       // Enable Sell Trades
-input int    Magic_Number        = 9999;       // EA Magic Number
-input int    Slippage            = 30;         // Max Slippage (Points)
+input bool   Trade_Buy           = true;       
+input bool   Trade_Sell          = true;       
+input int    Magic_Number        = 9999;       
+input int    Slippage            = 30;         
 
 input group  "=== Grid Settings ==="
-input double Start_Lot_Size      = 0.01;       // Starting Lot Size
-input double Lot_Add             = 0.00;       // Lot Adder
-input int    Maximum_Grid        = 10;         // Max Orders Per Side
-input int    Grid_Distance       = 1000;       // Distance (Points)
+input double Start_Lot_Size      = 0.01;       
+input double Lot_Add             = 0.00;       
+input int    Maximum_Grid        = 10;         
+input int    Grid_Distance       = 1000;       
 
 input group  "=== Risk & Targets ==="
-input double Target_Money        = 10.0;       // Target Profit ($)
-input double Grand_Target_Equity = 600.0;      // Equity Goal ($)
-input int    DD_Percentage_Cut   = 40;         // Max Drawdown %
-input int    Safety_TP           = 2000;       // Safety TP (Points)
-input double Stop_Loss           = 0;          // Stop Loss (0 = Off)
+input double Target_Money        = 10.0;       
+input double Grand_Target_Equity = 600.0;      
+input int    DD_Percentage_Cut   = 40;         
+input int    Safety_TP           = 2000;       
+input double Stop_Loss           = 0;          
 
 input group  "=== Dashboard ==="
-input int    Dashboard_X         = 170;        // X Offset
-input int    Dashboard_Y         = 20;         // Y Offset
-input color  Color_Text          = clrGold;    // Text Color
-input bool   Auto_Color          = true;       // Auto Dark Mode
+input int    Dashboard_X         = 170;        
+input int    Dashboard_Y         = 20;         
+input color  Color_Text          = clrGold;    
+input bool   Auto_Color          = true;       
 
 // ==========================================================================
-// [ส่วนที่ 2] : ตัวแปรระบบ และ Forward Declarations
+// [ส่วนที่ 2] : ตัวแปรระบบ
 // ==========================================================================
 double max_balance;
 bool   System_Enabled = true;
+datetime Last_News_Check_Time = 0; // [NEW] ตัวแปรจำว่าเช็คข่าวล่าสุดเมื่อไหร่
 
-// ประกาศชื่อฟังก์ชันล่วงหน้า
+// Forward Declarations
 void SetupChart();
 void CreateGUI();
 void UpdateDashboard();
 void UpdateButtonState();
 void CreateLabel(string name, string text, int x, int y, color c, int size);
 void CreateButton(string name, string text, int x, int y, int w, int h, color bg);
-void PrintDailyNews(); // <--- พระเอกของเรา (โชว์อย่างเดียว)
+void PrintDailyNews();
 void CheckProfitAndTargets();
 void CloseAllTrades();
 void CloseSpecificSide(ENUM_POSITION_TYPE type);
@@ -70,7 +71,7 @@ bool CheckMoney(double lot, ENUM_ORDER_TYPE type);
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   Print("Onpu V1.2 (News Monitor Only) Loaded.");
+   Print("Onpu V1.2 (News Monitor Auto) Loaded.");
    
    m_trade.SetExpertMagicNumber(Magic_Number);
    m_trade.SetDeviationInPoints(Slippage);
@@ -80,9 +81,6 @@ int OnInit()
    
    if(Auto_Color) SetupChart();
    CreateGUI();
-   
-   // [SHOW ONLY] สั่ง Print ข่าวตอนเริ่ม แต่ไม่ส่งผลกับ Logic เทรด
-   PrintDailyNews();
    
    return(INIT_SUCCEEDED);
   }
@@ -130,12 +128,20 @@ void OnTick()
    if(!m_symbol.Name(Symbol())) return;
    m_symbol.RefreshRates();
 
+   // [NEW] ระบบเช็ควันใหม่: ถ้าเวลาเปิดแท่ง Day เปลี่ยน แปลว่าขึ้นวันใหม่แล้ว
+   datetime current_day_start = iTime(Symbol(), PERIOD_D1, 0);
+   
+   if(Last_News_Check_Time != current_day_start)
+     {
+      PrintDailyNews(); // สั่งปริ้นท์ข่าว
+      Last_News_Check_Time = current_day_start; // จำไว้ว่าวันนี้ปริ้นท์แล้วนะ
+     }
+
    UpdateDashboard(); 
 
    if(!System_Enabled) return;
 
-   // --- TRADING LOGIC START (ไม่มีการเช็คข่าวในนี้) ---
-
+   // --- TRADING LOGIC (เหมือนเดิมทุกอย่าง) ---
    CheckProfitAndTargets();
 
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -147,16 +153,12 @@ void OnTick()
 
    if(drawdown_percent >= DD_Percentage_Cut)
      {
-      string msg = "⚠️ DANGER: Drawdown " + DoubleToString(drawdown_percent,2) + "% Limit Reached! Closing ALL.";
-      Print(msg);
-      Alert(msg);
       CloseAllTrades();
       System_Enabled = false; 
       UpdateButtonState();
       return;
      }
 
-   // 4. BUY Logic
    if(Trade_Buy)
      {
       int buy_count = CountPositions(POSITION_TYPE_BUY);
@@ -176,7 +178,6 @@ void OnTick()
       }
      }
 
-   // 5. SELL Logic
    if(Trade_Sell)
      {
       int sell_count = CountPositions(POSITION_TYPE_SELL);
@@ -204,14 +205,8 @@ void OnTick()
 bool CheckMoney(double lot, ENUM_ORDER_TYPE type) {
    double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    double req_margin = 0;
-   if(!OrderCalcMargin(type, Symbol(), lot, m_symbol.Ask(), req_margin)) {
-      Print("Error Calculating Margin");
-      return false;
-   }
-   if(free_margin < req_margin) {
-      Print("Not enough money for Lot ", lot);
-      return false;
-   }
+   if(!OrderCalcMargin(type, Symbol(), lot, m_symbol.Ask(), req_margin)) return false;
+   if(free_margin < req_margin) { Print("Not enough money for Lot ", lot); return false; }
    return true;
 }
 
@@ -274,14 +269,9 @@ void CheckProfitAndTargets() {
          }
       }
    }
-   if(sum_buy_profit >= Target_Money) {
-      CloseSpecificSide(POSITION_TYPE_BUY);
-      Print("Closed Buy Side. Profit: ", sum_buy_profit);
-   }
-   if(sum_sell_profit >= Target_Money) {
-      CloseSpecificSide(POSITION_TYPE_SELL);
-      Print("Closed Sell Side. Profit: ", sum_sell_profit);
-   }
+   if(sum_buy_profit >= Target_Money) { CloseSpecificSide(POSITION_TYPE_BUY); Print("Closed Buy Side. Profit: ", sum_buy_profit); }
+   if(sum_sell_profit >= Target_Money) { CloseSpecificSide(POSITION_TYPE_SELL); Print("Closed Sell Side. Profit: ", sum_sell_profit); }
+   
    if(AccountInfoDouble(ACCOUNT_EQUITY) >= Grand_Target_Equity) {
       CloseAllTrades();
       System_Enabled = false;
@@ -291,7 +281,7 @@ void CheckProfitAndTargets() {
 }
 
 // ==========================================================================
-// [ส่วนที่ 4] : GUI (Vertical Layout)
+// [ส่วนที่ 4] : GUI (Vertical Layout Fixed)
 // ==========================================================================
 
 void SetupChart() {
@@ -394,13 +384,12 @@ void CreateButton(string name, string text, int x, int y, int w, int h, color bg
    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, Dashboard_Y + y);
    ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
    ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
-   
    ObjectSetString(0, name, OBJPROP_TEXT, text);
    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
 }
 
 // ==========================================================================
-// [ส่วนที่ 5] : NEWS SCANNER FUNCTION (DISPLAY ONLY)
+// [ส่วนที่ 5] : NEWS SCANNER (DISPLAY ONLY)
 // ==========================================================================
 void PrintDailyNews()
 {
