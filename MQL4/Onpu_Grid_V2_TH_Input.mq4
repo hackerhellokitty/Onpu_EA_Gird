@@ -1,5 +1,10 @@
-#property copyright "Onpu Grid V2.3 (Stable & Clean)"
-#property version   "2.3_TH"
+//+------------------------------------------------------------------+
+//|                                         Onpu_Grid_V2.3.2.mq4 |
+//|                                     Copyright 2025, Onpu Dev Team |
+//|                                     Version 2.3.2 (Max Lot Safe)  |
+//+------------------------------------------------------------------+
+#property copyright "Onpu Grid V2.3.1 (Stable & Safe)"
+#property version   "2.31"
 #property strict
 
 // ==========================================================================
@@ -13,7 +18,8 @@ input int    Slippage            = 30;         // ยอมรับความ
 
 // --- 1.2 ตั้งค่า Grid & Lot (หัวใจของระบบ) ---
 input double Start_Lot_Size      = 0.01;       // Lot เริ่มต้น
-input double Lot_Add             = 0.00;       // บวก Lot เพิ่มทีละเท่าไหร่ (ทองแนะนำ 0)
+input double Lot_Add             = 0.01;       // บวก Lot เพิ่มทีละเท่าไหร่
+input double Max_Lot_Limit       = 0.10;       // [NEW] ล็อค Lot สูงสุด (สำคัญมาก!)
 input int    Maximum_Grid        = 10;         // สูงสุดกี่ไม้ (ต่อฝั่ง)
 input int    Grid_Distance       = 1000;       // ระยะห่างไม้แก้ (Points)
 
@@ -41,7 +47,7 @@ bool   System_Enabled = true; // ตัวแปรคุมปุ่ม Start/S
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   Print("Onpu V2.3 (Clean & Stable) Loaded.");
+   Print("Onpu V2.3.2 (Max Lot Safety) Loaded.");
    max_balance = AccountBalance();
    
    if(Auto_Color) SetupChart();
@@ -127,7 +133,10 @@ void OnTick()
      {
       int buy_count = CountOrders(OP_BUY);
       double last_buy_price = FindLastOpenPrice(OP_BUY);
-      double next_buy_lot = Start_Lot_Size + (buy_count * Lot_Add); 
+      
+      // [LOGIC UPDATE] คำนวณ Lot พร้อมเพดาน Max Lot
+      double raw_lot = Start_Lot_Size + (buy_count * Lot_Add); 
+      double next_buy_lot = (raw_lot > Max_Lot_Limit) ? Max_Lot_Limit : raw_lot;
       
       double price_tp = NormalizeDouble(Ask + Safety_TP * Point, Digits);
       double price_sl = (Stop_Loss == 0) ? 0 : NormalizeDouble(Ask - Stop_Loss * Point, Digits);
@@ -150,7 +159,10 @@ void OnTick()
      {
       int sell_count = CountOrders(OP_SELL);
       double last_sell_price = FindLastOpenPrice(OP_SELL);
-      double next_sell_lot = Start_Lot_Size + (sell_count * Lot_Add);
+      
+      // [LOGIC UPDATE] คำนวณ Lot พร้อมเพดาน Max Lot
+      double raw_lot = Start_Lot_Size + (sell_count * Lot_Add);
+      double next_sell_lot = (raw_lot > Max_Lot_Limit) ? Max_Lot_Limit : raw_lot;
 
       double price_tp = NormalizeDouble(Bid - Safety_TP * Point, Digits);
       double price_sl = (Stop_Loss == 0) ? 0 : NormalizeDouble(Bid + Stop_Loss * Point, Digits);
@@ -295,7 +307,7 @@ void CheckProfitAndTargets() {
 }
 
 // ==========================================================================
-// [ส่วนที่ 4] : หน้าจอแสดงผล (GUI)
+// [ส่วนที่ 4] : หน้าจอแสดงผล (GUI) - ปรับปรุงปุ่มแนวตั้ง
 // ==========================================================================
 
 void SetupChart() {
@@ -311,18 +323,18 @@ void SetupChart() {
 }
 
 void CreateGUI() {
-   // BG
+   // BG (ขยายลงมาหน่อยให้พอดีปุ่มแนวตั้ง)
    ObjectCreate(0, "Onpu_BG", OBJ_RECTANGLE_LABEL, 0, 0, 0);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_CORNER, CORNER_RIGHT_UPPER);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XDISTANCE, Dashboard_X);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_YDISTANCE, Dashboard_Y);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XSIZE, 230);
-   ObjectSetInteger(0, "Onpu_BG", OBJPROP_YSIZE, 250);
+   ObjectSetInteger(0, "Onpu_BG", OBJPROP_YSIZE, 280); // <--- เพิ่มความสูง
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BGCOLOR, clrDarkSlateGray);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BORDER_TYPE, BORDER_FLAT);
    
    // Labels
-   CreateLabel("Onpu_Lbl_Title", ":: ONPU GRID V2.3 ::", 20, 15, clrGold, 12);
+   CreateLabel("Onpu_Lbl_Title", ":: ONPU GRID V2.3.2 ::", 20, 15, clrGold, 12);
    CreateLabel("Onpu_Lbl_Magic", "Magic No : " + IntegerToString(Magic_Number), 20, 40, clrWhite, 9);
    CreateLabel("Onpu_Lbl_Status", "Status: RUNNING", 20, 60, clrLime, 10);
    CreateLabel("Onpu_Lbl_Bal", "Balance: 0.00", 20, 80, clrWhite, 9);
@@ -332,9 +344,9 @@ void CreateGUI() {
    CreateLabel("Onpu_Lbl_Orders", "B: 0 | S: 0", 20, 160, clrWhite, 9);
    CreateLabel("Onpu_Lbl_Goal", "GOAL: " + DoubleToString(Grand_Target_Equity, 2), 20, 180, clrAqua, 9);
 
-   // Buttons
-   CreateButton("Onpu_Btn_Switch", "STOP EA", 20, 205, 80, 30, clrRed);
-   CreateButton("Onpu_Btn_CloseAll", "CLOSE ALL", 110, 205, 90, 30, clrOrangeRed);
+   // Buttons (วางแนวตั้ง ไม่เบียดกัน)
+   CreateButton("Onpu_Btn_Switch", "STOP EA", 20, 205, 190, 30, clrRed);
+   CreateButton("Onpu_Btn_CloseAll", "CLOSE ALL", 20, 240, 190, 30, clrOrangeRed);
    
    ChartRedraw();
 }

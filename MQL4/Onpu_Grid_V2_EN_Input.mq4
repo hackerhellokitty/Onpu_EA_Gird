@@ -1,47 +1,53 @@
-#property copyright "Onpu Grid V2.3 (Stable & Clean)"
-#property version   "2.3_EN"
+//+------------------------------------------------------------------+
+//|                                         Onpu_Grid_V2.3.2.mq4 |
+//|                                     Copyright 2025, Onpu Dev Team |
+//|                                     Version 2.3.2 (Max Lot Safe)  |
+//+------------------------------------------------------------------+
+#property copyright "Onpu Grid V2.3.1 (Stable & Safe)"
+#property version   "2.31"
 #property strict
 
 // ==========================================================================
-// [ส่วนที่ 1] : การตั้งค่า (USER INPUTS) - แก้ไขได้ตามต้องการ
+// [SECTION 1] : USER INPUTS (SETTINGS)
 // ==========================================================================
-// --- 1.1 ตั้งค่าโหมดการเทรด ---
+// --- 1.1 Trading Mode ---
 input bool   Trade_Buy           = true;       // Enable Buy Trades
 input bool   Trade_Sell          = true;       // Enable Sell Trades
-input int    Magic_Number        = 9999;       // EA Magic Number
+input int    Magic_Number        = 9999;       // EA Magic Number (Unique ID)
 input int    Slippage            = 30;         // Max Slippage (Points)
 
-// --- 1.2 Grid & Martingale Settings ---
+// --- 1.2 Grid & Lot Settings ---
 input double Start_Lot_Size      = 0.01;       // Starting Lot Size
-input double Lot_Add             = 0.00;       // Lot Adder (0.0 for Fixed Lot)
+input double Lot_Add             = 0.01;       // Lot Adder (e.g., 0.01 for +0.01)
+input double Max_Lot_Limit       = 0.10;       // [NEW] Maximum Lot Size Limit
 input int    Maximum_Grid        = 10;         // Max Orders Per Side
-input int    Grid_Distance       = 1000;       // Distance between orders (Points)
+input int    Grid_Distance       = 1000;       // Grid Distance (Points)
 
-// --- 1.3 Risk Management & Targets ---
-input double Target_Money        = 10.0;       // Target Profit ($) to Close All
+// --- 1.3 Risk Management ---
+input double Target_Money        = 10.0;       // Target Profit ($) to Close Side
 input double Grand_Target_Equity = 600.0;      // Equity Goal ($) to Stop EA
 input int    DD_Percentage_Cut   = 40;         // Max Drawdown % (Hard Stop)
-input int    Safety_TP           = 2000;       // Safety TP sent to broker (Points)
-input double Stop_Loss           = 0;          // Order Stop Loss (0 = Disabled)
+input int    Safety_TP           = 2000;       // Safety TP (Points) sent to broker
+input double Stop_Loss           = 0;          // Stop Loss per trade (0 = Disabled)
 
 // --- 1.4 Visual Settings ---
-input int    Dashboard_X         = 150;        // Dashboard X Offset (Right)
-input int    Dashboard_Y         = 20;         // Dashboard Y Offset (Top)
+input int    Dashboard_X         = 150;        // Dashboard X Offset
+input int    Dashboard_Y         = 20;         // Dashboard Y Offset
 input color  Color_Text          = clrGold;    // Text Color
-input bool   Auto_Color          = true;       // Auto Color Scheme (Dark Mode)
+input bool   Auto_Color          = true;       // Auto Dark Mode
 
 // ==========================================================================
-// [ส่วนที่ 2] : ตัวแปรระบบ (SYSTEM VARIABLES) - ห้ามแก้ไข!
+// [SECTION 2] : SYSTEM VARIABLES
 // ==========================================================================
 double max_balance;
-bool   System_Enabled = true; // ตัวแปรคุมปุ่ม Start/Stop
+bool   System_Enabled = true;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   Print("Onpu V2.3 (Clean & Stable) Loaded.");
+   Print("Onpu V2.3.2 (Max Lot Safety) Loaded.");
    max_balance = AccountBalance();
    
    if(Auto_Color) SetupChart();
@@ -60,13 +66,13 @@ void OnDeinit(const int reason)
   }
 
 //+------------------------------------------------------------------+
-//| Event Handler: ปุ่มกดบนหน้าจอ                                      |
+//| Event Handler: On-Chart Buttons                                  |
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
   {
    if(id == CHARTEVENT_OBJECT_CLICK)
      {
-      // ปุ่ม Start/Stop
+      // Button Start/Stop
       if(sparam == "Onpu_Btn_Switch")
         {
          System_Enabled = !System_Enabled;
@@ -74,7 +80,7 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
          PlaySound("tick.wav");
          ChartRedraw();
         }
-      // ปุ่ม Close All
+      // Button Close All
       if(sparam == "Onpu_Btn_CloseAll")
         {
          if(MessageBox("CONFIRM CLOSE ALL TRADES?", "Emergency", MB_YESNO|MB_ICONWARNING) == IDYES)
@@ -88,20 +94,19 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
   }
 
 //+------------------------------------------------------------------+
-//| Expert tick function (ลอจิกหลักทำงานที่นี่)                          |
+//| Expert tick function (Main Logic)                                |
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   UpdateDashboard(); // อัปเดตตัวเลขหน้าจอตลอดเวลา
+   UpdateDashboard(); 
    RefreshRates();
 
-   // ถ้ากดปุ่ม STOP หรือเงินไม่พอ ให้หยุด
    if(!System_Enabled) return;
 
-   // 1. เช็คเป้าหมายกำไร
+   // 1. Check Profit Targets
    CheckProfitAndTargets();
 
-   // 2. คำนวณ Drawdown
+   // 2. Check Drawdown Safety
    double equity = AccountEquity();
    double balance = AccountBalance();
    if(equity > max_balance) max_balance = equity;
@@ -109,7 +114,7 @@ void OnTick()
    double drawdown_percent = 0;
    if(balance > 0) drawdown_percent = ((balance - equity) / balance) * 100;
 
-   // 3. SAFETY CUT: ตัดจบเมื่ออันตราย
+   // 3. SAFETY CUT
    if(drawdown_percent >= DD_Percentage_Cut)
      {
       string msg = "⚠️ DANGER: Drawdown " + DoubleToString(drawdown_percent,2) + "% Limit Reached! Closing ALL.";
@@ -122,19 +127,21 @@ void OnTick()
       return;
      }
 
-   // 4. ระบบเทรด BUY
+   // 4. BUY LOGIC
    if(Trade_Buy)
      {
       int buy_count = CountOrders(OP_BUY);
       double last_buy_price = FindLastOpenPrice(OP_BUY);
-      double next_buy_lot = Start_Lot_Size + (buy_count * Lot_Add); 
+      
+      // [LOGIC UPDATE] Calculate Lot with Max Limit
+      double raw_lot = Start_Lot_Size + (buy_count * Lot_Add); 
+      double next_buy_lot = (raw_lot > Max_Lot_Limit) ? Max_Lot_Limit : raw_lot;
       
       double price_tp = NormalizeDouble(Ask + Safety_TP * Point, Digits);
       double price_sl = (Stop_Loss == 0) ? 0 : NormalizeDouble(Ask - Stop_Loss * Point, Digits);
       
       string comment = "Onpu_" + IntegerToString(Magic_Number) + "_B" + IntegerToString(buy_count+1);
 
-      // เงื่อนไขเปิดไม้: ไม้แรก หรือ ระยะห่างถึงกำหนด
       if(buy_count == 0)
         {
          if(CheckMoney(next_buy_lot)) OpenOrder(OP_BUY, next_buy_lot, Ask, price_sl, price_tp, comment);
@@ -145,12 +152,15 @@ void OnTick()
         }
      }
 
-   // 5. ระบบเทรด SELL
+   // 5. SELL LOGIC
    if(Trade_Sell)
      {
       int sell_count = CountOrders(OP_SELL);
       double last_sell_price = FindLastOpenPrice(OP_SELL);
-      double next_sell_lot = Start_Lot_Size + (sell_count * Lot_Add);
+      
+      // [LOGIC UPDATE] Calculate Lot with Max Limit
+      double raw_lot = Start_Lot_Size + (sell_count * Lot_Add);
+      double next_sell_lot = (raw_lot > Max_Lot_Limit) ? Max_Lot_Limit : raw_lot;
 
       double price_tp = NormalizeDouble(Bid - Safety_TP * Point, Digits);
       double price_sl = (Stop_Loss == 0) ? 0 : NormalizeDouble(Bid + Stop_Loss * Point, Digits);
@@ -169,17 +179,15 @@ void OnTick()
   }
 
 // ==========================================================================
-// [ส่วนที่ 3] : ฟังก์ชันระบบ (HELPER FUNCTIONS)
+// [SECTION 3] : HELPER FUNCTIONS
 // ==========================================================================
 
-// ฟังก์ชันเปิดออเดอร์ (รวม ResetError และ Print ไว้ที่เดียว)
 void OpenOrder(int type, double lot, double price, double sl, double tp, string cmt)
 {
    ResetLastError();
    int ticket = OrderSend(Symbol(), type, lot, price, Slippage, sl, tp, cmt, Magic_Number, 0, (type==OP_BUY)?clrBlue:clrRed);
    
    if(ticket > 0) {
-      // แจ้งเตือนเมื่อเปิดไม้แรก
       if(cmt == "Onpu_"+IntegerToString(Magic_Number)+"_B1" || cmt == "Onpu_"+IntegerToString(Magic_Number)+"_S1") {
          Alert("📢 EA STARTED: New Position Opened [" + Symbol() + "]");
       }
@@ -188,7 +196,6 @@ void OpenOrder(int type, double lot, double price, double sl, double tp, string 
    }
 }
 
-// เช็คเงินประกันก่อนเปิด (ป้องกัน Error 134)
 bool CheckMoney(double lot) {
    double free_margin = AccountFreeMargin();
    double required_margin = MarketInfo(Symbol(), MODE_MARGINREQUIRED) * lot;
@@ -229,7 +236,7 @@ void CloseSpecificSide(int type) {
    for(int i = OrdersTotal() - 1; i >= 0; i--) {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
          if(OrderSymbol() == Symbol() && OrderMagicNumber() == Magic_Number && OrderType() == type) {
-            RefreshRates(); // อัปเดตราคาเสมอ
+            RefreshRates(); 
             double close_price = (type == OP_BUY) ? Bid : Ask;
             bool res = OrderClose(OrderTicket(), OrderLots(), close_price, Slippage, clrGreen);
             if(!res) Print("Close Side Error: ", GetLastError());
@@ -246,7 +253,7 @@ void CloseAllTrades() {
    for(int i = total - 1; i >= 0; i--) {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
          if(OrderSymbol() == Symbol() && OrderMagicNumber() == Magic_Number) {
-            RefreshRates(); // สำคัญมาก! กันปิดไม่ติดตอนกราฟวิ่งแรง
+            RefreshRates(); 
             bool res = false;
             int type = OrderType();
             
@@ -272,7 +279,7 @@ void CheckProfitAndTargets() {
       }
    }
    
-   // ปิดรวบกำไร
+   // Close by Target Money
    if(sum_buy_profit >= Target_Money) {
       CloseSpecificSide(OP_BUY);
       Print("Closed Buy Side. Profit: ", sum_buy_profit);
@@ -282,7 +289,7 @@ void CheckProfitAndTargets() {
       Print("Closed Sell Side. Profit: ", sum_sell_profit);
    }
    
-   // เป้าหมายใหญ่ (หยุด EA)
+   // Close by Grand Target
    if(AccountEquity() >= Grand_Target_Equity) {
       string msg = "🏆 CONGRATULATIONS! Grand Target ($" + DoubleToString(Grand_Target_Equity, 2) + ") Reached. Stopping EA.";
       Print(msg);
@@ -295,7 +302,7 @@ void CheckProfitAndTargets() {
 }
 
 // ==========================================================================
-// [ส่วนที่ 4] : หน้าจอแสดงผล (GUI)
+// [SECTION 4] : DASHBOARD GUI
 // ==========================================================================
 
 void SetupChart() {
@@ -311,18 +318,18 @@ void SetupChart() {
 }
 
 void CreateGUI() {
-   // BG
+   // BG (Resized for vertical buttons)
    ObjectCreate(0, "Onpu_BG", OBJ_RECTANGLE_LABEL, 0, 0, 0);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_CORNER, CORNER_RIGHT_UPPER);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XDISTANCE, Dashboard_X);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_YDISTANCE, Dashboard_Y);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_XSIZE, 230);
-   ObjectSetInteger(0, "Onpu_BG", OBJPROP_YSIZE, 250);
+   ObjectSetInteger(0, "Onpu_BG", OBJPROP_YSIZE, 280); 
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BGCOLOR, clrDarkSlateGray);
    ObjectSetInteger(0, "Onpu_BG", OBJPROP_BORDER_TYPE, BORDER_FLAT);
    
    // Labels
-   CreateLabel("Onpu_Lbl_Title", ":: ONPU GRID V2.3 ::", 20, 15, clrGold, 12);
+   CreateLabel("Onpu_Lbl_Title", ":: ONPU GRID V2.3.2 ::", 20, 15, clrGold, 12);
    CreateLabel("Onpu_Lbl_Magic", "Magic No : " + IntegerToString(Magic_Number), 20, 40, clrWhite, 9);
    CreateLabel("Onpu_Lbl_Status", "Status: RUNNING", 20, 60, clrLime, 10);
    CreateLabel("Onpu_Lbl_Bal", "Balance: 0.00", 20, 80, clrWhite, 9);
@@ -332,10 +339,9 @@ void CreateGUI() {
    CreateLabel("Onpu_Lbl_Orders", "B: 0 | S: 0", 20, 160, clrWhite, 9);
    CreateLabel("Onpu_Lbl_Goal", "GOAL: " + DoubleToString(Grand_Target_Equity, 2), 20, 180, clrAqua, 9);
 
-   // Buttons
-   CreateButton("Onpu_Btn_Switch", "STOP EA", 20, 205, 80, 30, clrRed);
-   CreateButton("Onpu_Btn_CloseAll", "CLOSE ALL", 110, 205, 90, 30, clrOrangeRed);
-   
+   // Buttons (Vertical Layout)
+   CreateButton("Onpu_Btn_Switch", "STOP EA", 20, 205, 190, 30, clrRed);
+   CreateButton("Onpu_Btn_CloseAll", "CLOSE ALL", 20, 240, 190, 30, clrOrangeRed);
    ChartRedraw();
 }
 
@@ -361,7 +367,7 @@ void UpdateDashboard() {
    double sum_profit = 0;
    for(int i=0; i<OrdersTotal(); i++) {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) {
-         if(OrderMagicNumber() == Magic_Number && OrderSymbol() == Symbol())
+         if(OrderMagicNumber()==Magic_Number && OrderSymbol()==Symbol())
             sum_profit += OrderProfit() + OrderSwap() + OrderCommission();
       }
    }
